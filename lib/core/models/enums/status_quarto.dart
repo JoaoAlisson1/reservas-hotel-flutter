@@ -1,0 +1,1 @@
+enum StatusQuarto { Disponivel, Ocupado, Reservado, Manutencao, Limpeza, Indisponivel }
