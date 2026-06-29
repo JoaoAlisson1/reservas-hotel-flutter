@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../core/dao/hospedeDAO.dart';
-import '../core/dao/quartoDAO.dart';
-import '../core/dao/reservaDAO.dart';
 import '../core/models/hospede.dart';
 import '../core/models/quarto.dart';
 import '../core/models/reserva.dart';
 import '../core/models/enums/status_reserva.dart';
 import '../core/authentication/auth_service.dart';
+import '../service/hospede_service.dart';
+import '../service/quarto_service.dart';
+import '../service/reserva_service.dart';
 
 class ReservaRegisterScreen extends StatefulWidget {
   final Reserva? reservaParaEdicao;
@@ -20,7 +20,9 @@ class ReservaRegisterScreen extends StatefulWidget {
 
 class _ReservaRegisterScreenState extends State<ReservaRegisterScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _dao = ReservaDAO();
+  final ReservaService _reservaService = ReservaService();
+  final QuartoService _quartoService = QuartoService();
+  final HospedeService _hospedeService = HospedeService();
 
   List<Quarto> _quartosDisponiveis = [];
   List<Hospede> _todosHospedes = [];
@@ -30,7 +32,9 @@ class _ReservaRegisterScreenState extends State<ReservaRegisterScreen> {
   DateTimeRange? _datasSelecionadas;
   double _valorTotalCalculado = 0.0;
   StatusReserva _status = StatusReserva.Reservada;
+
   bool _isLoading = true;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -40,24 +44,29 @@ class _ReservaRegisterScreenState extends State<ReservaRegisterScreen> {
 
   Future<void> _carregarDados() async {
     try {
-      final hospedes = await HospedeDAO().findAll();
-      final quartos = await QuartoDAO().findAll();
+      final hospedes = await _hospedeService.getHospedes();
+      final quartos = await _quartoService.getQuartos();
+
+      if (!mounted) return;
 
       setState(() {
         _todosHospedes = hospedes;
-        _quartosDisponiveis = quartos.where((q) =>
-        !ReservaDAO.statusBloqueados.contains(q.status)
-        ).toList();
+        _quartosDisponiveis = quartos.where((q) => q.status.name == 'Disponivel').toList();
 
         if (widget.reservaParaEdicao != null) {
           final reserva = widget.reservaParaEdicao!;
+
           _hospedesSelecionados = _todosHospedes
               .where((h) => reserva.hospedesIds.any((id) => id.toString() == h.id.toString()))
               .toList();
 
-          _quartoSelecionado = quartos.firstWhere((q) => q.id == reserva.quartoId);
-          if (!_quartosDisponiveis.any((q) => q.id == _quartoSelecionado!.id)) {
-            _quartosDisponiveis.add(_quartoSelecionado!);
+          try {
+            _quartoSelecionado = quartos.firstWhere((q) => q.id == reserva.quartoId);
+            if (!_quartosDisponiveis.any((q) => q.id == _quartoSelecionado!.id)) {
+              _quartosDisponiveis.add(_quartoSelecionado!);
+            }
+          } catch (_) {
+            debugPrint("Quarto da reserva de edição não encontrado localmente.");
           }
 
           _status = reserva.status;
@@ -67,11 +76,14 @@ class _ReservaRegisterScreenState extends State<ReservaRegisterScreen> {
         _isLoading = false;
       });
     } catch (e) {
-      debugPrint("Erro ao carregar dados: $e");
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      _mostrarErro("Falha ao sincronizar dados com o servidor: $e");
     }
   }
 
   void _selecionarHospedes() async {
+    if (_isSaving) return;
     await showDialog(
       context: context,
       builder: (context) {
@@ -82,7 +94,7 @@ class _ReservaRegisterScreenState extends State<ReservaRegisterScreen> {
               content: SizedBox(
                 width: double.maxFinite,
                 child: _todosHospedes.isEmpty
-                    ? const Text("Nenhum hóspede cadastrado.")
+                    ? const Text("Nenhum hóspede cadastrado no servidor.")
                     : ListView.builder(
                   shrinkWrap: true,
                   itemCount: _todosHospedes.length,
@@ -133,6 +145,7 @@ class _ReservaRegisterScreenState extends State<ReservaRegisterScreen> {
   }
 
   Future<void> _selecionarDatas() async {
+    if (_isSaving) return;
     final DateTimeRange? picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime.now().subtract(const Duration(days: 365)),
@@ -147,14 +160,24 @@ class _ReservaRegisterScreenState extends State<ReservaRegisterScreen> {
   }
 
   void _salvar() async {
+    if (_hospedesSelecionados.isEmpty) {
+      _mostrarErro("Selecione ao menos um hóspede.");
+      return;
+    }
+    if (_datasSelecionadas == null) {
+      _mostrarErro("Selecione o período de check-in e check-out.");
+      return;
+    }
+
     if (_formKey.currentState!.validate()) {
       final usuarioLogadoId = AuthService().usuarioLogado?.id;
 
       if (usuarioLogadoId == null) {
-        _mostrarErro("Nenhum usuário logado no sistema.");
-
+        _mostrarErro("Sessão expirada. Faça login novamente.");
         return;
       }
+
+      setState(() => _isSaving = true);
 
       final reserva = Reserva(
         id: widget.reservaParaEdicao?.id,
@@ -170,13 +193,20 @@ class _ReservaRegisterScreenState extends State<ReservaRegisterScreen> {
 
       try {
         if (widget.reservaParaEdicao == null) {
-          await _dao.insertReserva(reserva, _quartoSelecionado!);
+          await _reservaService.insertReserva(reserva);
         } else {
-          await _dao.updateReservaManual(reserva, _quartoSelecionado!);
+          await _reservaService.updateReserva(reserva);
         }
-        if (mounted) Navigator.pop(context, true);
+
+        if (!mounted) return;
+        Navigator.pop(context, true);
       } catch (e) {
+        if (!mounted) return;
         _mostrarErro(e.toString());
+      } finally {
+        if (mounted) {
+          setState(() => _isSaving = false);
+        }
       }
     }
   }
@@ -184,8 +214,9 @@ class _ReservaRegisterScreenState extends State<ReservaRegisterScreen> {
   void _mostrarErro(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-          content: Text(msg.replaceAll('Exception: ', '')),
-          backgroundColor: Colors.red
+        content: Text(msg.replaceAll('Exception: ', '')),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
@@ -194,12 +225,13 @@ class _ReservaRegisterScreenState extends State<ReservaRegisterScreen> {
   Widget build(BuildContext context) {
     final df = DateFormat('dd/MM/yyyy');
 
-    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator(color: Colors.blueGrey)));
 
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.reservaParaEdicao == null ? "Nova Reserva" : "Editar Reserva"),
         backgroundColor: Colors.blueGrey,
+        foregroundColor: Colors.white,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -214,7 +246,7 @@ class _ReservaRegisterScreenState extends State<ReservaRegisterScreen> {
               const SizedBox(height: 15),
 
               InkWell(
-                onTap: _selecionarHospedes,
+                onTap: _isSaving ? null : _selecionarHospedes,
                 child: InputDecorator(
                   decoration: const InputDecoration(
                     labelText: "Hóspedes",
@@ -247,17 +279,15 @@ class _ReservaRegisterScreenState extends State<ReservaRegisterScreen> {
                   value: q,
                   child: Text("Quarto ${q.numero} (${q.tipo.name})"),
                 )).toList(),
-                onChanged: (val) {
+                onChanged: _isSaving ? null : (val) {
                   setState(() => _quartoSelecionado = val);
                   _atualizarCalculo();
                 },
                 validator: (val) => val == null ? "Selecione um quarto" : null,
               ),
               const SizedBox(height: 20),
-
-              // Seletor de Datas
               InkWell(
-                onTap: _selecionarDatas,
+                onTap: _isSaving ? null : _selecionarDatas,
                 child: InputDecorator(
                   decoration: const InputDecoration(
                     labelText: "Período",
@@ -270,8 +300,6 @@ class _ReservaRegisterScreenState extends State<ReservaRegisterScreen> {
                 ),
               ),
               const SizedBox(height: 30),
-
-              // Widget de Resumo
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
@@ -286,7 +314,6 @@ class _ReservaRegisterScreenState extends State<ReservaRegisterScreen> {
                         style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.1)),
                     const SizedBox(height: 15),
 
-                    // Mostra o número do quarto e o valor da diária
                     if (_quartoSelecionado != null)
                       _resumoLinha("Quarto selecionado:", "Nº ${_quartoSelecionado!.numero} (${_quartoSelecionado!.tipo.name})"),
 
@@ -297,7 +324,6 @@ class _ReservaRegisterScreenState extends State<ReservaRegisterScreen> {
 
                     _resumoLinha("Total de Hóspedes:", "${_hospedesSelecionados.length}"),
 
-                    // mostra as datas separadas e as diárias
                     if (_datasSelecionadas != null) ...[
                       _resumoLinha("Data de Entrada:", df.format(_datasSelecionadas!.start)),
                       _resumoLinha("Data de Saída:", df.format(_datasSelecionadas!.end)),
@@ -319,17 +345,22 @@ class _ReservaRegisterScreenState extends State<ReservaRegisterScreen> {
                 ),
               ),
               const SizedBox(height: 30),
-
               SizedBox(
                 width: double.infinity,
                 height: 55,
                 child: ElevatedButton(
-                  onPressed: _salvar,
+                  onPressed: _isSaving ? null : _salvar,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blueGrey,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
-                  child: const Text("Confirmar Reserva",
+                  child: _isSaving
+                      ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                  )
+                      : const Text("Confirmar Reserva",
                       style: TextStyle(fontSize: 16, color: Colors.white)),
                 ),
               ),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/authentication/auth_service.dart';
 import '../core/models/usuario.dart';
-import '../core/dao/usuarioDAO.dart';
+import '../service/usuario_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -18,6 +18,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? permissaoSelecionada;
 
   final List<String> perfis = ['ADMIN', 'RECEPCIONISTA'];
+  bool _isSaving = false;
+
+  @override
+  void dispose() {
+    loginController.dispose();
+    senhaController.dispose();
+    super.dispose();
+  }
+
+  void _mostrarFeedback(String mensagem, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(mensagem),
+        backgroundColor: isError ? Colors.redAccent : Colors.green,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,13 +64,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     fontWeight: FontWeight.bold,
                     color: Colors.blueGrey),
               ),
-
-              // Campo de E-mail (Login)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 12.0),
                 child: TextFormField(
                   controller: loginController,
                   keyboardType: TextInputType.emailAddress,
+                  enabled: !_isSaving,
                   validator: (value) {
                     if (value == null || value.isEmpty) return '* Obrigatório';
                     if (!value.contains('@') || !value.contains('.')) {
@@ -67,18 +84,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ),
               ),
-
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 12.0),
                 child: DropdownButtonFormField<String>(
-                  initialValue: permissaoSelecionada,
+                  value: permissaoSelecionada,
                   items: perfis.map((String perfil) {
                     return DropdownMenuItem<String>(
                       value: perfil,
                       child: Text(perfil),
                     );
                   }).toList(),
-                  onChanged: (novoValor) {
+                  onChanged: _isSaving ? null : (novoValor) {
                     setState(() {
                       permissaoSelecionada = novoValor;
                     });
@@ -91,13 +107,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ),
               ),
-
-              // Campo de Senha
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 12.0),
                 child: TextFormField(
                   controller: senhaController,
                   obscureText: true,
+                  enabled: !_isSaving,
                   validator: (value) => (value == null || value.length < 3)
                       ? 'Mínimo 3 caracteres'
                       : null,
@@ -110,29 +125,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
 
               const SizedBox(height: 30),
-
-              // Botão de Cadastrar
               SizedBox(
                 height: 50,
                 width: 250,
                 child: ElevatedButton(
-                  onPressed: () async {
+                  onPressed: _isSaving ? null : () async {
                     if (_formKey.currentState!.validate()) {
+                      setState(() => _isSaving = true);
+
                       final String emailInserido = loginController.text.trim();
-
-                      final bool emailJaExiste = await UsuarioDAO().verificarSeEmailExiste(emailInserido);
-
-                      if (emailJaExiste) {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Este e-mail já está cadastrado no sistema!'),
-                              backgroundColor: Colors.redAccent,
-                            ),
-                          );
-                        }
-                        return;
-                      }
 
                       final Usuario novoUsuario = Usuario(
                         login: emailInserido,
@@ -140,26 +141,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         permissao: permissaoSelecionada!,
                       );
 
-                      final bool success = await AuthService().register(novoUsuario);
+                      try {
+                        await UsuarioService().insertUsuario(novoUsuario);
 
-                      if (success) {
+                        _mostrarFeedback('Usuário cadastrado com sucesso!');
+                        if (mounted) Navigator.pop(context);
+                      } catch (e) {
+
+                        _mostrarFeedback(e.toString(), isError: true);
+                      } finally {
                         if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Usuário cadastrado com sucesso!'),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
-                          Navigator.pop(context);
-                        }
-                      } else {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Erro ao cadastrar usuário.'),
-                              backgroundColor: Colors.redAccent,
-                            ),
-                          );
+                          setState(() => _isSaving = false);
                         }
                       }
                     }
@@ -170,7 +162,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20)),
                   ),
-                  child: const Text('Cadastrar', style: TextStyle(fontSize: 22)),
+                  child: _isSaving
+                      ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                  )
+                      : const Text('Cadastrar', style: TextStyle(fontSize: 22)),
                 ),
               ),
             ],

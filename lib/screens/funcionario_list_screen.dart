@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
-import '../core/dao/funcionarioDAO.dart';
 import '../core/models/funcionario.dart';
 import '../core/authentication/auth_service.dart';
+import '../service/funcionario_service.dart';
 import 'funcionario_register_screen.dart';
 
 class FuncionarioListScreen extends StatefulWidget {
@@ -13,7 +13,8 @@ class FuncionarioListScreen extends StatefulWidget {
 }
 
 class _FuncionarioListScreenState extends State<FuncionarioListScreen> {
-  final FuncionarioDAO _dao = FuncionarioDAO();
+
+  final FuncionarioService _service = FuncionarioService();
   List<Funcionario> _funcionarios = [];
   bool _isLoading = true;
 
@@ -21,7 +22,6 @@ class _FuncionarioListScreenState extends State<FuncionarioListScreen> {
   final TextEditingController _searchController = TextEditingController();
   bool _isSearchOpen = false;
 
-  // Máscara para formatar a exibição do telefone na lista
   final _maskFormatter = MaskTextInputFormatter(
     mask: '(##) #####-####',
     filter: {"#": RegExp(r'[0-9]')},
@@ -42,13 +42,26 @@ class _FuncionarioListScreenState extends State<FuncionarioListScreen> {
   Future<void> _carregarFuncionarios() async {
     setState(() => _isLoading = true);
     try {
-      final dados = await _dao.findAll();
+      final dados = await _service.getFuncionarios();
+
+      if (!mounted) return;
+
       setState(() {
         _funcionarios = dados;
         _funcionariosFiltrados = dados;
       });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: Colors.red,
+        ),
+      );
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -130,7 +143,6 @@ class _FuncionarioListScreenState extends State<FuncionarioListScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              // Só prossegue se o formulário for válido
               if (_formKeyEdit.currentState!.validate()) {
                 final updated = Funcionario(
                   id: f.id,
@@ -141,9 +153,18 @@ class _FuncionarioListScreenState extends State<FuncionarioListScreen> {
                 );
 
                 try {
-                  await _dao.updateFuncionario(updated);
+                  await _service.updateFuncionario(updated);
+
+                  if (!context.mounted) return;
+                  Navigator.pop(context);
                   _carregarFuncionarios();
-                  if (context.mounted) Navigator.pop(context);
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Funcionário atualizado com sucesso!"),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
                 } catch (e) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -290,9 +311,30 @@ class _FuncionarioListScreenState extends State<FuncionarioListScreen> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
           TextButton(
             onPressed: () async {
-              await _dao.delete(f.id!);
-              _carregarFuncionarios();
-              if (mounted) Navigator.pop(context);
+              try {
+                await _service.deleteFuncionario(f.id!);
+
+                if (!mounted) return;
+                Navigator.pop(context);
+                _carregarFuncionarios();
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text("Funcionário ${f.nome} removido."),
+                    backgroundColor: Colors.redAccent,
+                  ),
+                );
+              } catch (e) {
+                if (!mounted) return;
+                Navigator.pop(context);
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(e.toString().replaceAll('Exception: ', '')),
+                    backgroundColor: Colors.orange.shade900,
+                  ),
+                );
+              }
             },
             child: const Text("Excluir", style: TextStyle(color: Colors.red)),
           ),

@@ -11,7 +11,6 @@ class Usuario {
     required this.permissao,
   });
 
-  // Converte um Objeto Usuario para um Map (para salvar no SQLite)
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -21,12 +20,11 @@ class Usuario {
     };
   }
 
-  // Converte um Map do SQLite para um Objeto Usuario (para usar no Flutter)
   factory Usuario.fromMap(Map<String, dynamic> map) {
     return Usuario(
       id: map['id'] as int?,
       login: map['login'] as String,
-      senha: map['senha'] as String,
+      senha: map['senha'] != null ? map['senha'] as String : '',
       permissao: map['permissao'] as String,
     );
   }

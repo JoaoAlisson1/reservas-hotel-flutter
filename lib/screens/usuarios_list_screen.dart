@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/authentication/auth_service.dart';
 import '../core/models/usuario.dart';
-import '../core/dao/usuarioDAO.dart';
+import '../service/usuario_service.dart';
 import 'register_screen.dart';
 
 class UsuariosListScreen extends StatefulWidget {
@@ -12,6 +12,9 @@ class UsuariosListScreen extends StatefulWidget {
 }
 
 class _UsuariosListScreenState extends State<UsuariosListScreen> {
+
+  final UsuarioService _usuarioService = UsuarioService();
+
   List<Usuario> usuarios = [];
   bool loading = true;
 
@@ -24,18 +27,25 @@ class _UsuariosListScreenState extends State<UsuariosListScreen> {
   getUsuarios() async {
     setState(() => loading = true);
     try {
-      usuarios = await UsuarioDAO().findAllUsuarios();
+      final lista = await _usuarioService.getUsuarios();
+      setState(() {
+        usuarios = lista;
+      });
+    } catch (e) {
+      _mostrarMensagem("Erro ao carregar usuários: $e", escorregadio: true);
     } finally {
       setState(() => loading = false);
     }
   }
 
   deleteUsuario(int id) async {
-    await UsuarioDAO().deleteUsuario(id);
-    getUsuarios();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Usuário removido com sucesso!')),
-    );
+    try {
+      await _usuarioService.deleteUsuario(id);
+      _mostrarMensagem('Usuário removido com sucesso!');
+      getUsuarios();
+    } catch (e) {
+      _mostrarMensagem(e.toString());
+    }
   }
 
   editUsuario(int index) async {
@@ -60,7 +70,7 @@ class _UsuariosListScreenState extends State<UsuariosListScreen> {
                 const SizedBox(height: 10),
 
                 DropdownButtonFormField<String>(
-                  initialValue: permissaoEditada,
+                  value: permissaoEditada,
                   items: const [
                     DropdownMenuItem(value: 'ADMIN', child: Text('ADMIN')),
                     DropdownMenuItem(value: 'RECEPCIONISTA', child: Text('RECEPCIONISTA')),
@@ -89,9 +99,15 @@ class _UsuariosListScreenState extends State<UsuariosListScreen> {
                   permissao: permissaoEditada!,
                   senha: senhaController.text,
                 );
-                await UsuarioDAO().updateUsuario(updated);
-                getUsuarios();
-                Navigator.pop(context);
+
+                try {
+                  await _usuarioService.updateUsuario(updated);
+                  _mostrarMensagem('Usuário atualizado com sucesso!');
+                  if (mounted) Navigator.pop(context);
+                  getUsuarios();
+                } catch (e) {
+                  _mostrarMensagem(e.toString());
+                }
               },
               child: const Text('Salvar'),
             ),
@@ -101,9 +117,19 @@ class _UsuariosListScreenState extends State<UsuariosListScreen> {
     );
   }
 
+  void _mostrarMensagem(String msg, {bool escorregadio = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg.replaceAll('Exception: ', '')),
+        backgroundColor: escorregadio ? Colors.red : Colors.green,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final bool usuarioLogadoEhAdmin = AuthService().usuarioLogado?.permissao == 'ADMIN';
+    final bool usuarioLogadoEhAdmin = AuthService().ehAdmin;
 
     return Scaffold(
       appBar: AppBar(
@@ -120,7 +146,7 @@ class _UsuariosListScreenState extends State<UsuariosListScreen> {
         itemCount: usuarios.length,
         itemBuilder: (context, index) {
           final user = usuarios[index];
-          final bool isAdmin = user.permissao == 'ADMIN';
+          final bool isAdmin = user.permissao.toUpperCase() == 'ADMIN';
 
           return Card(
             elevation: 2,
@@ -139,15 +165,12 @@ class _UsuariosListScreenState extends State<UsuariosListScreen> {
               ),
               subtitle: Text(isAdmin ? 'Administrador' : 'Recepcionista'),
 
-              // O menu de ações só aparece se o usuário que está logado for um ADMIN
               trailing: usuarioLogadoEhAdmin ? PopupMenuButton<String>(
                 onSelected: (value) {
                   if (value == 'edit') editUsuario(index);
                   if (value == 'delete') {
                     if (user.id == 1) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('O Administrador raiz não pode ser excluído!')),
-                      );
+                      _mostrarMensagem('O Administrador raiz não pode ser excluído!', escorregadio: true);
                     } else {
                       deleteUsuario(user.id!);
                     }
@@ -175,7 +198,7 @@ class _UsuariosListScreenState extends State<UsuariosListScreen> {
                     ),
                   ),
                 ],
-              ) : null, // Se não for admin, o menu de editar/excluir some da lista
+              ) : null,
             ),
           );
         },

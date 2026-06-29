@@ -40,6 +40,8 @@ dependencies:
   uuid: ^4.3.3
   mask_text_input_formatter: ^2.9.0
   intl: ^0.20.2
+  http: ^1.2.1
+  flutter_secure_storage: ^9.2.2
 
 dev_dependencies:
   flutter_test:

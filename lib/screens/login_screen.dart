@@ -2,12 +2,25 @@ import 'package:flutter/material.dart';
 import '../core/authentication/auth_service.dart';
 import 'home_screen.dart';
 
-class LoginScreen extends StatelessWidget {
-  LoginScreen({super.key});
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
 
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final loginController = TextEditingController();
   final passwordController = TextEditingController();
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    loginController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,13 +51,12 @@ class LoginScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 20),
-
-              // Campo de E-mail
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 16.0),
                 child: TextFormField(
                   controller: loginController,
                   keyboardType: TextInputType.emailAddress,
+                  enabled: !_isLoading,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Por favor, insira seu e-mail';
@@ -70,6 +82,7 @@ class LoginScreen extends StatelessWidget {
                 child: TextFormField(
                   controller: passwordController,
                   obscureText: true,
+                  enabled: !_isLoading,
                   validator: (value) => (value == null || value.isEmpty) ? '* Obrigatório' : null,
                   decoration: InputDecoration(
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
@@ -84,12 +97,17 @@ class LoginScreen extends StatelessWidget {
                 height: 50,
                 width: 250,
                 child: ElevatedButton(
-                  onPressed: () async {
+                  onPressed: _isLoading ? null : () async {
                     if (_formKey.currentState!.validate()) {
+                      setState(() => _isLoading = true);
+
                       final bool success = await AuthService().login(
-                        loginController.text,
+                        loginController.text.trim(),
                         passwordController.text,
                       );
+
+                      if (!mounted) return;
+                      setState(() => _isLoading = false);
 
                       if (success) {
                         Navigator.pushReplacement(
@@ -112,9 +130,18 @@ class LoginScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                      'Login',
-                      style: TextStyle(color: Colors.white, fontSize: 20)
+                  child: _isLoading
+                      ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                      : const Text(
+                    'Login',
+                    style: TextStyle(color: Colors.white, fontSize: 20),
                   ),
                 ),
               ),

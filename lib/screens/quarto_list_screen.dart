@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../core/dao/quartoDAO.dart';
 import '../core/models/enums/status_quarto.dart';
 import '../core/models/enums/tipo_quarto.dart';
 import '../core/models/quarto.dart';
 import '../core/authentication/auth_service.dart';
+import '../service/quarto_service.dart';
 import 'quarto_register_screen.dart';
 
 class QuartoListScreen extends StatefulWidget {
@@ -14,7 +14,8 @@ class QuartoListScreen extends StatefulWidget {
 }
 
 class _QuartoListScreenState extends State<QuartoListScreen> {
-  final QuartoDAO _dao = QuartoDAO();
+
+  final QuartoService _service = QuartoService();
   List<Quarto> _quartos = [];
   bool _isLoading = true;
 
@@ -37,11 +38,20 @@ class _QuartoListScreenState extends State<QuartoListScreen> {
   Future<void> _carregarQuartos() async {
     setState(() => _isLoading = true);
     try {
-      final dados = await _dao.findAll();
+      final dados = await _service.getQuartos();
       setState(() {
         _quartos = dados;
-        _quartosFiltrados = dados; // Inicializa a lista filtrada com todos os dados
+        _quartosFiltrados = dados;
       });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } finally {
       setState(() => _isLoading = false);
     }
@@ -152,7 +162,7 @@ class _QuartoListScreenState extends State<QuartoListScreen> {
                   );
 
                   try {
-                    await _dao.updateQuarto(updated);
+                    await _service.updateQuarto(updated);
                     _carregarQuartos();
                     if (context.mounted) {
                       Navigator.pop(context);
@@ -189,8 +199,8 @@ class _QuartoListScreenState extends State<QuartoListScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = AuthService();
-    final bool podeEditar = auth.podeGerenciarOperacoes; // Admin ou Recepcionista
-    final bool podeExcluir = auth.ehAdmin; // Apenas Admin
+    final bool podeEditar = auth.podeGerenciarOperacoes;
+    final bool podeExcluir = auth.ehAdmin;
 
     return Scaffold(
       appBar: AppBar(
@@ -312,7 +322,7 @@ class _QuartoListScreenState extends State<QuartoListScreen> {
           TextButton(
             onPressed: () async {
               try {
-                await _dao.deleteQuarto(q.id!);
+                await _service.deleteQuarto(q.id!);
                 if (mounted) Navigator.pop(c);
                 _carregarQuartos();
 

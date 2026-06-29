@@ -1,1 +1,8 @@
-enum TipoQuarto { Solteiro, Casal, Duplo, Triplo, Familiar, Suite }
+enum TipoQuarto {
+  Solteiro,
+  Casal,
+  Duplo,
+  Triplo,
+  Familiar,
+  Suite
+}

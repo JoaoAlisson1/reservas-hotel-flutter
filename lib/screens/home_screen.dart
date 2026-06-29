@@ -3,7 +3,6 @@ import 'package:dormez_app/screens/reserva_list_screen.dart';
 import 'package:flutter/material.dart';
 import '../core/authentication/auth_service.dart';
 import 'funcionario_list_screen.dart';
-import 'funcionario_register_screen.dart';
 import 'hospede_list_screen.dart';
 import 'usuarios_list_screen.dart';
 import 'login_screen.dart';
@@ -13,11 +12,10 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final usuarioLogado = AuthService().usuarioLogado;
-
-    String cargoDisplay = usuarioLogado?.permissao == 'ADMIN'
-        ? 'Administrador'
-        : 'Recepcionista';
+    final authService = AuthService();
+    final usuarioLogado = authService.usuarioLogado;
+    final bool isAdmin = authService.ehAdmin;
+    String cargoDisplay = isAdmin ? 'Administrador' : 'Recepcionista';
 
     return Scaffold(
       appBar: AppBar(
@@ -127,9 +125,7 @@ class HomeScreen extends StatelessWidget {
                       );
                     },
                   ),
-
-                  // Só aparece para admin
-                  if (usuarioLogado?.permissao == 'ADMIN')
+                  if (isAdmin)
                     _buildMenuItem(
                       context,
                       title: 'Config. Usuários',
@@ -160,10 +156,12 @@ class HomeScreen extends StatelessWidget {
   }
 
   void _handleLogout(BuildContext context) {
-    AuthService().logout(); // Limpa o usuário da memória
-    Navigator.pushReplacement(
+    AuthService().logout();
+
+    Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (context) => LoginScreen()),
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (route) => false,
     );
   }
 

@@ -3,7 +3,7 @@ import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import '../core/models/enums/status_quarto.dart';
 import '../core/models/enums/tipo_quarto.dart';
 import '../core/models/quarto.dart';
-import '../core/dao/quartoDAO.dart';
+import '../service/quarto_service.dart';
 
 class QuartoRegisterScreen extends StatefulWidget {
   const QuartoRegisterScreen({super.key});
@@ -20,6 +20,13 @@ class _QuartoRegisterScreenState extends State<QuartoRegisterScreen> {
 
   TipoQuarto _tipoSelecionado = TipoQuarto.Solteiro;
   StatusQuarto _statusSelecionado = StatusQuarto.Disponivel;
+
+  @override
+  void dispose() {
+    _numeroController.dispose();
+    _diariaController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +50,7 @@ class _QuartoRegisterScreenState extends State<QuartoRegisterScreen> {
               const SizedBox(height: 16),
 
               DropdownButtonFormField<TipoQuarto>(
-                initialValue: _tipoSelecionado,
+                value: _tipoSelecionado,
                 decoration: const InputDecoration(labelText: 'Tipo de Quarto', border: OutlineInputBorder()),
                 items: TipoQuarto.values.map((tipo) => DropdownMenuItem(
                     value: tipo,
@@ -54,7 +61,7 @@ class _QuartoRegisterScreenState extends State<QuartoRegisterScreen> {
               const SizedBox(height: 16),
 
               DropdownButtonFormField<StatusQuarto>(
-                initialValue: _statusSelecionado,
+                value: _statusSelecionado,
                 decoration: const InputDecoration(labelText: 'Status Inicial', border: OutlineInputBorder()),
                 items: StatusQuarto.values.map((status) => DropdownMenuItem(
                     value: status,
@@ -108,12 +115,18 @@ class _QuartoRegisterScreenState extends State<QuartoRegisterScreen> {
       );
 
       try {
-        await QuartoDAO().insertQuarto(novoQuarto);
+        await QuartoService().insertQuarto(novoQuarto);
+
         if (mounted) Navigator.pop(context, true);
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(e.toString().replaceAll('Exception: ', '')),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }

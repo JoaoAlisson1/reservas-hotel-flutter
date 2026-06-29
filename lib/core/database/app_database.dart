@@ -21,9 +21,7 @@ class AppDatabase {
     return await openDatabase(
       path,
       version: 1,
-
       onConfigure: (db) async {
-
         await db.execute('PRAGMA foreign_keys = ON');
       },
       onCreate: _onCreate,
@@ -34,78 +32,65 @@ class AppDatabase {
 
     await db.execute('''
       CREATE TABLE usuarios (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        login TEXT NOT NULL UNIQUE,
-        senha TEXT NOT NULL,
-        permissao TEXT NOT NULL
+        id INTEGER PRIMARY KEY
       )
     ''');
 
-    // Inserção do Usuário Mestre com o novo padrão "ADMIN"
-    await db.insert('usuarios', {
-      'login': 'admin@hotel.com',
-      'senha': '123',
-      'permissao': 'ADMIN'
-    });
+    await db.execute('''
+      CREATE TABLE funcionarios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uuid TEXT NOT NULL,
+        nome TEXT NOT NULL,
+        email TEXT NOT NULL UNIQUE,
+        telefone TEXT NOT NULL
+      )
+    ''');
 
     await db.execute('''
-  CREATE TABLE funcionarios (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    uuid TEXT NOT NULL,
-    nome TEXT NOT NULL,
-    email TEXT NOT NULL UNIQUE,
-    telefone TEXT NOT NULL
-  )
-''');
+      CREATE TABLE quartos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        numero INTEGER NOT NULL UNIQUE,
+        tipo TEXT NOT NULL,
+        status TEXT NOT NULL,
+        diaria REAL NOT NULL
+      )
+    ''');
 
     await db.execute('''
-  CREATE TABLE quartos (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    uuid TEXT NOT NULL,
-    numero INTEGER NOT NULL UNIQUE,
-    tipo TEXT NOT NULL,
-    status TEXT NOT NULL,
-    diaria REAL NOT NULL
-  )
-''');
+      CREATE TABLE hospedes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        email TEXT NOT NULL UNIQUE,
+        telefone TEXT NOT NULL,
+        cpf TEXT NOT NULL UNIQUE
+      )
+    ''');
 
     await db.execute('''
-  CREATE TABLE hospedes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    uuid TEXT NOT NULL UNIQUE,
-    nome TEXT NOT NULL,
-    email TEXT NOT NULL UNIQUE,
-    telefone TEXT NOT NULL,
-    cpf TEXT NOT NULL UNIQUE
-  )
-''');
+      CREATE TABLE reservas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        checkIn TEXT NOT NULL,
+        checkOut TEXT NOT NULL,
+        valorTotal REAL NOT NULL,
+        status TEXT NOT NULL,
+        usuario_id INTEGER NOT NULL,
+        quarto_id INTEGER NOT NULL,
+        FOREIGN KEY (usuario_id) REFERENCES usuarios (id),
+        FOREIGN KEY (quarto_id) REFERENCES quartos (id)
+      )
+    ''');
 
+    // Tabela Associativa (Hóspedes da Reserva)
     await db.execute('''
-  CREATE TABLE reservas (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    uuid TEXT NOT NULL UNIQUE,
-    checkIn TEXT NOT NULL,
-    checkOut TEXT NOT NULL,
-    valorTotal REAL NOT NULL,
-    status TEXT NOT NULL,
-    usuario_id INTEGER NOT NULL,
-    quarto_id INTEGER NOT NULL,
-    FOREIGN KEY (usuario_id) REFERENCES usuarios (id),
-    FOREIGN KEY (quarto_id) REFERENCES quartos (id)
-  )
-''');
+      CREATE TABLE reserva_hospede (
+        reserva_id INTEGER NOT NULL,
+        hospede_id INTEGER NOT NULL,
+        PRIMARY KEY (reserva_id, hospede_id),
+        FOREIGN KEY (reserva_id) REFERENCES reservas (id) ON DELETE CASCADE,
+        FOREIGN KEY (hospede_id) REFERENCES hospedes (id) ON DELETE RESTRICT 
+      )
+    ''');
 
-// Tabela Associativa (Hóspedes da Reserva)
-    await db.execute('''
-  CREATE TABLE reserva_hospede (
-    reserva_id INTEGER NOT NULL,
-    hospede_id INTEGER NOT NULL,
-    PRIMARY KEY (reserva_id, hospede_id),
-    FOREIGN KEY (reserva_id) REFERENCES reservas (id) ON DELETE CASCADE,
-    FOREIGN KEY (hospede_id) REFERENCES hospedes (id) ON DELETE RESTRICT 
-  )
-''');
-
-    print('Banco de dados inicializado: Usuário ADMIN padrão criado.');
+    print('Banco de dados SQLite inicializado localmente em sincronia com a API.');
   }
 }

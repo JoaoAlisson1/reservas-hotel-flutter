@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
-import '../core/dao/hospedeDAO.dart';
 import '../core/models/hospede.dart';
 import '../core/authentication/auth_service.dart';
+import '../service/hospede_service.dart';
 import 'hospede_register_screen.dart';
 
 class HospedeListScreen extends StatefulWidget {
@@ -13,7 +13,8 @@ class HospedeListScreen extends StatefulWidget {
 }
 
 class _HospedeListScreenState extends State<HospedeListScreen> {
-  final HospedeDAO _dao = HospedeDAO();
+
+  final HospedeService _service = HospedeService();
   List<Hospede> _hospedes = [];
   bool _isLoading = true;
 
@@ -21,7 +22,6 @@ class _HospedeListScreenState extends State<HospedeListScreen> {
   final TextEditingController _searchController = TextEditingController();
   bool _isSearchOpen = false;
 
-  // Máscaras para formatar a exibição e os campos de edição
   final _maskTelefone = MaskTextInputFormatter(mask: '(##) #####-####');
   final _maskCPF = MaskTextInputFormatter(mask: '###.###.###-##');
 
@@ -40,13 +40,28 @@ class _HospedeListScreenState extends State<HospedeListScreen> {
   Future<void> _carregarHospedes() async {
     setState(() => _isLoading = true);
     try {
-      final dados = await _dao.findAll();
+      // Chama o endpoint GET /hospedes
+      final dados = await _service.getHospedes();
+
+      if (!mounted) return;
+
       setState(() {
         _hospedes = dados;
         _hospedesFiltrados = dados;
       });
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: Colors.red,
+        ),
+      );
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -83,7 +98,7 @@ class _HospedeListScreenState extends State<HospedeListScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = AuthService();
-    final bool podeGerenciar = auth.podeGerenciarOperacoes; // Admin ou Recepcionista
+    final bool podeGerenciar = auth.podeGerenciarOperacoes;
 
     return Scaffold(
       appBar: AppBar(
@@ -110,7 +125,7 @@ class _HospedeListScreenState extends State<HospedeListScreen> {
                 _isSearchOpen = !_isSearchOpen;
                 if (!_isSearchOpen) {
                   _searchController.clear();
-                  _hospedesFiltrados = _hospedes; // Reseta a lista ao fechar a busca
+                  _hospedesFiltrados = _hospedes;
                 }
               });
             },
@@ -215,8 +230,7 @@ class _HospedeListScreenState extends State<HospedeListScreen> {
           TextButton(
             onPressed: () async {
               try {
-
-                await _dao.deleteHospede(h.id!);
+                await _service.deleteHospede(h.id!);
 
                 if (mounted) Navigator.pop(c);
                 _carregarHospedes();
@@ -230,7 +244,6 @@ class _HospedeListScreenState extends State<HospedeListScreen> {
                   );
                 }
               } catch (e) {
-
                 if (mounted) Navigator.pop(c);
 
                 if (mounted) {

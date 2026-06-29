@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../core/dao/reservaDAO.dart';
 import '../core/models/reserva.dart';
 import '../core/models/enums/status_reserva.dart';
 import '../core/authentication/auth_service.dart';
+import '../service/reserva_service.dart';
 import 'reserva_register_screen.dart';
 
 class ReservaListScreen extends StatefulWidget {
@@ -14,7 +14,7 @@ class ReservaListScreen extends StatefulWidget {
 }
 
 class _ReservaListScreenState extends State<ReservaListScreen> {
-  final ReservaDAO _dao = ReservaDAO();
+  final ReservaService _service = ReservaService();
   final _df = DateFormat('dd/MM/yyyy');
 
   List<Reserva> _reservas = [];
@@ -30,16 +30,35 @@ class _ReservaListScreenState extends State<ReservaListScreen> {
     _carregarReservas();
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _carregarReservas() async {
     setState(() => _isLoading = true);
     try {
-      final dados = await _dao.findAll();
+      final dados = await _service.getReservas();
+
+      if (!mounted) return;
+
       setState(() {
         _reservas = dados;
         _reservasFiltradas = dados;
       });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: Colors.red,
+        ),
+      );
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -295,21 +314,24 @@ class _ReservaListScreenState extends State<ReservaListScreen> {
             onPressed: () async {
               try {
                 if (acao == "Check-in") {
-                  await _dao.realizarCheckIn(r.id!, r.quartoId);
+                  await _service.realizarCheckIn(r.id!);
                 } else {
-                  await _dao.realizarCheckOut(r.id!, r.quartoId);
+
+                  await _service.realizarCheckOut(r.id!);
                 }
-                if (mounted) Navigator.pop(c);
+
+                if (!mounted) return;
+                Navigator.pop(c);
                 _carregarReservas();
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("$acao concluído!"), backgroundColor: Colors.green),
-                  );
-                }
-              } catch (e) {
-                if (mounted) Navigator.pop(c);
+
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text("Erro ao processar: $e"), backgroundColor: Colors.red),
+                  SnackBar(content: Text("$acao concluído!"), backgroundColor: Colors.green),
+                );
+              } catch (e) {
+                if (!mounted) return;
+                Navigator.pop(c);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(e.toString().replaceAll('Exception: ', '')), backgroundColor: Colors.red),
                 );
               }
             },
@@ -331,9 +353,8 @@ class _ReservaListScreenState extends State<ReservaListScreen> {
   void _confirmarExclusao(Reserva r) {
     String mensagemAviso = "Deseja remover a reserva de ${r.nomeHospedePrincipal}?";
     if (r.status == StatusReserva.Check_in) {
-      mensagemAviso = "ESTA RESERVA ESTÁ ATIVA.\n\nAo excluir, o quarto ${r.numeroQuarto} será liberado. Continuar?";
+      mensagemAviso = "ESTA RESERVA ESTÁ ATIVA.\n\nAo excluir, o quarto ${r.numeroQuarto} será liberado pela API. Continuar?";
     }
-
     showDialog(
       context: context,
       builder: (c) => AlertDialog(
@@ -345,12 +366,21 @@ class _ReservaListScreenState extends State<ReservaListScreen> {
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade800),
             onPressed: () async {
               try {
-                await _dao.deleteReservaManual(r);
-                if (mounted) Navigator.pop(c);
+                await _service.deleteReserva(r.id!);
+
+                if (!mounted) return;
+                Navigator.pop(c);
                 _carregarReservas();
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Reserva removida com sucesso!"), backgroundColor: Colors.green),
+                );
               } catch (e) {
-                if (mounted) Navigator.pop(c);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro: $e"), backgroundColor: Colors.red));
+                if (!mounted) return;
+                Navigator.pop(c);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(e.toString().replaceAll('Exception: ', '')), backgroundColor: Colors.red),
+                );
               }
             },
             child: const Text("Excluir", style: TextStyle(color: Colors.white)),

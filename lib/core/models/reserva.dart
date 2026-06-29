@@ -37,7 +37,6 @@ class Reserva {
     // Calcula a diferença absoluta em dias
     int dias = checkOut.difference(checkIn).inDays;
 
-    // Se a reserva for no mesmo dia ou < 24h, garante no mínimo 1 diária
     if (dias <= 0) {
       dias = 1;
     }
@@ -55,10 +54,10 @@ class Reserva {
       'status': status.name,
       'usuario_id': usuarioId,
       'quarto_id': quartoId,
+      'hospedes_ids': hospedesIds,
     };
   }
 
-  /// Cria um objeto Reserva a partir dos dados do banco
   factory Reserva.fromMap(Map<String, dynamic> map) {
     return Reserva(
       id: map['id'],
@@ -67,10 +66,13 @@ class Reserva {
       checkOut: DateTime.parse(map['checkOut']),
       valorTotal: map['valorTotal']?.toDouble() ?? 0.0,
       status: StatusReserva.values.byName(map['status']),
-      usuarioId: map['usuario_id'],
-      quartoId: map['quarto_id'],
-      nomeHospedePrincipal: map['nome_hospede'],
-      numeroQuarto: map['numero_quarto'],
-    )..loginUsuarioResponsavel = map['login_usuario'];
+      usuarioId: map['usuarioId'] ?? map['usuario_id'],
+      quartoId: map['quartoId'] ?? map['quarto_id'],
+      nomeHospedePrincipal: map['nomeHospedePrincipal'] ?? map['nome_hospede'],
+      numeroQuarto: map['numeroQuarto'] ?? map['numero_quarto'],
+      hospedesIds: map['hospedesIds'] != null
+          ? List<int>.from(map['hospedesIds'])
+          : (map['hospedes_ids'] != null ? List<int>.from(map['hospedes_ids']) : []),
+    )..loginUsuarioResponsavel = map['loginUsuarioResponsavel'] ?? map['login_usuario'];
   }
 }

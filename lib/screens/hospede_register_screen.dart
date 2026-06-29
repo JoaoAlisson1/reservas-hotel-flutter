@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
-import '../core/dao/hospedeDAO.dart';
 import '../core/models/hospede.dart';
+import '../service/hospede_service.dart';
 
 class HospedeRegisterScreen extends StatefulWidget {
-  final Hospede? hospedeParaEdicao; // Recebe o objeto se for edição
+  final Hospede? hospedeParaEdicao;
 
   const HospedeRegisterScreen({super.key, this.hospedeParaEdicao});
 
@@ -19,8 +19,9 @@ class _HospedeRegisterScreenState extends State<HospedeRegisterScreen> {
   late TextEditingController _emailController;
   late TextEditingController _telefoneController;
   late TextEditingController _cpfController;
+  final HospedeService _service = HospedeService();
+  bool _isSaving = false;
 
-  // Máscaras
   final _maskTelefone = MaskTextInputFormatter(mask: '(##) #####-####');
   final _maskCPF = MaskTextInputFormatter(mask: '###.###.###-##');
 
@@ -60,6 +61,8 @@ class _HospedeRegisterScreenState extends State<HospedeRegisterScreen> {
 
   void _salvar() async {
     if (_formKey.currentState!.validate()) {
+      setState(() => _isSaving = true);
+
       final hospede = Hospede(
         id: widget.hospedeParaEdicao?.id,
         uuid: widget.hospedeParaEdicao?.uuid,
@@ -71,32 +74,39 @@ class _HospedeRegisterScreenState extends State<HospedeRegisterScreen> {
 
       try {
         if (widget.hospedeParaEdicao == null) {
-          await HospedeDAO().insertHospede(hospede);
+
+          await _service.insertHospede(hospede);
         } else {
-          await HospedeDAO().updateHospede(hospede);
+
+          await _service.updateHospede(hospede);
         }
 
         if (mounted) Navigator.pop(context, true);
       } catch (e) {
+        if (!mounted) return;
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text(e.toString().replaceAll('Exception: ', '')),
               backgroundColor: Colors.red
           ),
         );
+      } finally {
+        if (mounted) {
+          setState(() => _isSaving = false);
+        }
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-
     final bool isEdicao = widget.hospedeParaEdicao != null;
-
     return Scaffold(
       appBar: AppBar(
-          title: Text(isEdicao ? "Editar Hóspede" : "Novo Hóspede"),
-          backgroundColor: Colors.blueGrey
+        title: Text(isEdicao ? "Editar Hóspede" : "Novo Hóspede"),
+        backgroundColor: Colors.blueGrey,
+        foregroundColor: Colors.white,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -107,12 +117,14 @@ class _HospedeRegisterScreenState extends State<HospedeRegisterScreen> {
               Icon(isEdicao ? Icons.edit_note : Icons.person_add_alt_1, size: 80, color: Colors.blueGrey),
               const SizedBox(height: 20),
               TextFormField(
+                enabled: !_isSaving,
                 controller: _nomeController,
                 decoration: const InputDecoration(labelText: 'Nome Completo', border: OutlineInputBorder()),
                 validator: (v) => (v == null || v.isEmpty) ? 'Informe o nome' : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
+                enabled: !_isSaving,
                 controller: _cpfController,
                 inputFormatters: [_maskCPF],
                 keyboardType: TextInputType.number,
@@ -121,6 +133,7 @@ class _HospedeRegisterScreenState extends State<HospedeRegisterScreen> {
               ),
               const SizedBox(height: 16),
               TextFormField(
+                enabled: !_isSaving,
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
                 decoration: const InputDecoration(labelText: 'E-mail', border: OutlineInputBorder()),
@@ -128,6 +141,7 @@ class _HospedeRegisterScreenState extends State<HospedeRegisterScreen> {
               ),
               const SizedBox(height: 16),
               TextFormField(
+                enabled: !_isSaving,
                 controller: _telefoneController,
                 inputFormatters: [_maskTelefone],
                 keyboardType: TextInputType.phone,
@@ -139,8 +153,18 @@ class _HospedeRegisterScreenState extends State<HospedeRegisterScreen> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                    onPressed: _salvar,
-                    child: Text(isEdicao ? "Salvar Alterações" : "Salvar Registro")
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueGrey,
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: _isSaving ? null : _salvar,
+                    child: _isSaving
+                        ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                        : Text(isEdicao ? "Salvar Alterações" : "Salvar Registro")
                 ),
               )
             ],

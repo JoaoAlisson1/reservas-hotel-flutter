@@ -1,4 +1,8 @@
-import '../dao/usuarioDAO.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:sqflite/sqflite.dart';
+import '../database/app_database.dart';
 import '../models/usuario.dart';
 
 class AuthService {
@@ -6,58 +10,67 @@ class AuthService {
   factory AuthService() => _instance;
   AuthService._internal();
 
-  final UsuarioDAO _usuarioDAO = UsuarioDAO();
+  final String _baseUrlLogin = 'https://reservas-hotel-flutter-api-2.onrender.com/login';
 
-  // Variável que armazena quem está usando o app no momento
+  final _storage = const FlutterSecureStorage();
+
   Usuario? _usuarioLogado;
   Usuario? get usuarioLogado => _usuarioLogado;
 
   bool get podeGerenciarOperacoes {
     if (_usuarioLogado == null) return false;
-    return _usuarioLogado!.permissao == 'ADMIN' ||
-        _usuarioLogado!.permissao == 'RECEPCIONISTA';
+    final permissao = _usuarioLogado!.permissao.toUpperCase();
+    return permissao == 'ADMIN' || permissao == 'RECEPCIONISTA';
   }
 
-  /// Retorna verdadeiro apenas se for ADMIN.
-  /// Usado para: Excluir qualquer registro e gerenciar a equipe de Funcionários.
   bool get ehAdmin {
-    return _usuarioLogado?.permissao == 'ADMIN';
+    if (_usuarioLogado == null) return false;
+    return _usuarioLogado!.permissao.toUpperCase() == 'ADMIN';
+  }
+
+  Future<String?> getToken() async {
+    return await _storage.read(key: 'jwt_token');
   }
 
   Future<bool> login(String email, String senha) async {
     try {
-      final user = await _usuarioDAO.getUsuario(email, senha);
-      if (user != null) {
-        _usuarioLogado = user;
+      final response = await http.post(
+        Uri.parse(_baseUrlLogin),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'login': email,
+          'senha': senha,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = jsonDecode(response.body);
+
+        String token = data['accessToken'];
+        await _storage.write(key: 'jwt_token', value: token);
+
+        _usuarioLogado = Usuario.fromMap(data);
+
+        if (_usuarioLogado?.id != null) {
+          final db = await AppDatabase().database;
+          await db.insert(
+            'usuarios',
+            {'id': _usuarioLogado!.id},
+            conflictAlgorithm: ConflictAlgorithm.ignore,
+          );
+        }
+
         return true;
       }
       return false;
     } catch (e) {
-      print("Erro no login: $e");
+      print("Erro no login HTTP: $e");
       return false;
     }
   }
 
-  Future<bool> register(Usuario usuario) async {
-    try {
-
-      final bool emailJaExiste = await _usuarioDAO.verificarSeEmailExiste(usuario.login);
-
-      if (emailJaExiste) {
-        print("Erro no registro: O e-mail ${usuario.login} já está em uso.");
-        return false; // Retorna false e impede o cadastro
-      }
-
-      await _usuarioDAO.insertUsuario(usuario);
-      return true;
-    } catch (e) {
-      print("Erro no registro: $e");
-
-      return false;
-    }
-  }
-
-  void logout() {
+  Future<void> logout() async {
     _usuarioLogado = null;
+    await _storage.delete(key: 'jwt_token');
   }
 }
