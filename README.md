@@ -1,6 +1,6 @@
 # 🏨 Dormez Hotel - App Mobile
 
-Aplicativo móvel para gerenciamento de hotéis, desenvolvido em **Flutter** para a disciplina de Desenvolvimento de Software. O app consome uma API Spring Boot segura com autenticação via Token JWT.
+Aplicativo móvel para gerenciamento de hotéis, desenvolvido em **Flutter** para a disciplina de Programação Para Dispositivos Móveis. O app consome uma API Spring Boot segura com autenticação via Token JWT.
 
 ## 🔑 Credenciais para Teste 
 Para acessar o sistema com privilégios de Administrador, utilize os dados abaixo na tela de login:
